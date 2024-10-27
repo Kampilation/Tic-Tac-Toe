@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Tic-Tac-Toe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.11.0/tf.min.js"></script>
+    <style>
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 4px;
+            background: #333;
+            padding: 4px;
+            border-radius: 8px;
+            width: fit-content;
+            margin: 20px auto;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell:hover {
+            background: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .status {
+            margin: 20px 0;
+            font-size: 24px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            margin: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Tic-Tac-Toe</h1>
+        <div class="status" id="status">Your turn (X)</div>
+        <div class="board" id="board"></div>
+        <button onclick="resetGame()">New Game</button>
+        <button onclick="trainAI()">Train AI</button>
+        <p id="training-status"></p>
+    </div>
+
+    <script src="tictactoe.js"></script>
+</body>
+</html>
