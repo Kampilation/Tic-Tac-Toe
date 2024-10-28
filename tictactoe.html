@@ -40,6 +40,9 @@
             margin: 20px 0;
             font-size: 24px;
         }
+        .difficulty {
+            margin: 20px 0;
+        }
         button {
             padding: 10px 20px;
             font-size: 16px;
@@ -53,15 +56,27 @@
         button:hover {
             background: #0056b3;
         }
+        select {
+            padding: 8px;
+            font-size: 16px;
+            margin: 0 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>AI Tic-Tac-Toe</h1>
+        <div class="difficulty">
+            AI Difficulty: 
+            <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard" selected>Hard</option>
+            </select>
+        </div>
         <div class="status" id="status">Your turn (X)</div>
         <div class="board" id="board"></div>
         <button onclick="resetGame()">New Game</button>
-        <button onclick="trainAI()">Train AI</button>
         <p id="training-status"></p>
     </div>
 

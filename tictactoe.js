@@ -1,25 +1,143 @@
-let model;
 let board = Array(9).fill('');
 let gameActive = true;
 let currentPlayer = 'X';
 
-// Initialize the neural network
-async function initializeModel() {
-    model = tf.sequential({
-        layers: [
-            tf.layers.dense({ units: 128, activation: 'relu', inputShape: [9] }),
-            tf.layers.dense({ units: 64, activation: 'relu' }),
-            tf.layers.dense({ units: 9, activation: 'softmax' })
-        ]
-    });
+// Minimax algorithm with alpha-beta pruning
+function minimax(board, depth, isMaximizing, alpha = -Infinity, beta = Infinity) {
+    const scores = {
+        X: -10,
+        O: 10,
+        tie: 0
+    };
 
-    model.compile({
-        optimizer: tf.train.adam(0.001),
-        loss: 'categoricalCrossentropy',
-        metrics: ['accuracy']
-    });
+    const result = checkWinningMove(board);
+    if (result !== null) {
+        return scores[result];
+    }
 
-    await trainAI();
+    if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+            if (board[i] === '') {
+                board[i] = 'O';
+                const score = minimax(board, depth + 1, false, alpha, beta);
+                board[i] = '';
+                bestScore = Math.max(score, bestScore);
+                alpha = Math.max(alpha, score);
+                if (beta <= alpha) break;
+            }
+        }
+        return bestScore;
+    } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+            if (board[i] === '') {
+                board[i] = 'X';
+                const score = minimax(board, depth + 1, true, alpha, beta);
+                board[i] = '';
+                bestScore = Math.min(score, bestScore);
+                beta = Math.min(beta, score);
+                if (beta <= alpha) break;
+            }
+        }
+        return bestScore;
+    }
+}
+
+// Strategic move evaluation
+function evaluateMove(board, index) {
+    // Check if move can win
+    const tempBoard = [...board];
+    tempBoard[index] = 'O';
+    if (checkWinningMove(tempBoard) === 'O') return 100;
+
+    // Check if need to block opponent
+    tempBoard[index] = 'X';
+    if (checkWinningMove(tempBoard) === 'X') return 90;
+
+    // Prioritize center
+    if (index === 4) return 70;
+
+    // Prioritize corners
+    if ([0, 2, 6, 8].includes(index)) return 60;
+
+    return 50;
+}
+
+// AI move logic
+function makeAIMove() {
+    if (!gameActive) return;
+
+    const difficulty = document.getElementById('difficulty').value;
+    let moveIndex;
+
+    if (difficulty === 'hard') {
+        // Use minimax for perfect play
+        let bestScore = -Infinity;
+        let bestMove = -1;
+
+        for (let i = 0; i < 9; i++) {
+            if (board[i] === '') {
+                board[i] = 'O';
+                const score = minimax(board, 0, false);
+                board[i] = '';
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = i;
+                }
+            }
+        }
+        moveIndex = bestMove;
+    } else if (difficulty === 'medium') {
+        // Mix of strategic and random moves
+        const emptyIndices = board.reduce((acc, cell, index) => {
+            if (cell === '') acc.push(index);
+            return acc;
+        }, []);
+
+        const moveScores = emptyIndices.map(index => ({
+            index,
+            score: evaluateMove(board, index)
+        }));
+
+        // Sometimes make suboptimal moves
+        const randomFactor = Math.random();
+        moveScores.sort((a, b) => b.score - a.score);
+
+        if (randomFactor < 0.3) {
+            // Make a random move 30% of the time
+            moveIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+        } else {
+            // Make the best move 70% of the time
+            moveIndex = moveScores[0].index;
+        }
+    } else {
+        // Easy mode - mostly random moves
+        const emptyIndices = board.reduce((acc, cell, index) => {
+            if (cell === '') acc.push(index);
+            return acc;
+        }, []);
+
+        // Only block obvious wins or take obvious winning moves
+        let strategicMove = -1;
+        for (const index of emptyIndices) {
+            if (evaluateMove(board, index) >= 90) {
+                strategicMove = index;
+                break;
+            }
+        }
+
+        if (strategicMove !== -1 && Math.random() < 0.3) {
+            moveIndex = strategicMove;
+        } else {
+            moveIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+        }
+    }
+
+    if (moveIndex !== -1 && moveIndex !== undefined) {
+        makeMove(moveIndex);
+    }
 }
 
 // Create the game board
@@ -53,14 +171,10 @@ function makeMove(index) {
     board[index] = currentPlayer;
     updateBoard();
 
-    if (checkWin()) {
-        document.getElementById('status').textContent = `${currentPlayer} wins!`;
-        gameActive = false;
-        return;
-    }
-
-    if (board.every(cell => cell !== '')) {
-        document.getElementById('status').textContent = "It's a draw!";
+    const winner = checkWinningMove(board);
+    if (winner) {
+        document.getElementById('status').textContent = winner === 'tie' ?
+            "It's a tie!" : `${winner} wins!`;
         gameActive = false;
         return;
     }
@@ -69,32 +183,26 @@ function makeMove(index) {
     document.getElementById('status').textContent = `${currentPlayer}'s turn`;
 }
 
-// AI move using the trained model
-async function makeAIMove() {
-    if (!gameActive) return;
+// Check for winning move
+function checkWinningMove(board) {
+    const winPatterns = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+        [0, 4, 8], [2, 4, 6] // Diagonals
+    ];
 
-    const boardTensor = tf.tensor2d([
-        board.map(cell => {
-            if (cell === 'X') return 1;
-            if (cell === 'O') return -1;
-            return 0;
-        })
-    ]);
-
-    const prediction = await model.predict(boardTensor).data();
-    let bestMove = -1;
-    let bestScore = -Infinity;
-
-    for (let i = 0; i < 9; i++) {
-        if (board[i] === '' && prediction[i] > bestScore) {
-            bestScore = prediction[i];
-            bestMove = i;
+    for (const pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+            return board[a];
         }
     }
 
-    if (bestMove !== -1) {
-        makeMove(bestMove);
+    if (board.every(cell => cell !== '')) {
+        return 'tie';
     }
+
+    return null;
 }
 
 // Update the visual board
@@ -103,20 +211,6 @@ function updateBoard() {
     for (let i = 0; i < cells.length; i++) {
         cells[i].textContent = board[i];
     }
-}
-
-// Check for win conditions
-function checkWin() {
-    const winPatterns = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-        [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
-        [0, 4, 8], [2, 4, 6] // Diagonals
-    ];
-
-    return winPatterns.some(pattern => {
-        const [a, b, c] = pattern;
-        return board[a] && board[a] === board[b] && board[a] === board[c];
-    });
 }
 
 // Reset the game
@@ -128,75 +222,5 @@ function resetGame() {
     updateBoard();
 }
 
-// Train the AI
-async function trainAI() {
-    const trainingStatus = document.getElementById('training-status');
-    trainingStatus.textContent = 'Training AI...';
-
-    // Generate training data
-    const trainingData = [];
-    const trainingLabels = [];
-
-    // Generate random game scenarios
-    for (let i = 0; i < 1000; i++) {
-        const gameBoard = Array(9).fill('');
-        const moves = [];
-
-        // Simulate random game
-        for (let j = 0; j < Math.floor(Math.random() * 9); j++) {
-            const emptyCells = gameBoard.reduce((acc, cell, index) => {
-                if (cell === '') acc.push(index);
-                return acc;
-            }, []);
-
-            if (emptyCells.length > 0) {
-                const moveIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                gameBoard[moveIndex] = j % 2 === 0 ? 'X' : 'O';
-                moves.push(moveIndex);
-            }
-        }
-
-        // Add to training data
-        trainingData.push(
-            gameBoard.map(cell => {
-                if (cell === 'X') return 1;
-                if (cell === 'O') return -1;
-                return 0;
-            })
-        );
-
-        // Create one-hot encoded label for the next best move
-        const label = Array(9).fill(0);
-        const emptyCells = gameBoard.reduce((acc, cell, index) => {
-            if (cell === '') acc.push(index);
-            return acc;
-        }, []);
-
-        if (emptyCells.length > 0) {
-            const bestMove = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-            label[bestMove] = 1;
-        }
-        trainingLabels.push(label);
-    }
-
-    // Convert to tensors
-    const xs = tf.tensor2d(trainingData);
-    const ys = tf.tensor2d(trainingLabels);
-
-    // Train the model
-    await model.fit(xs, ys, {
-        epochs: 50,
-        batchSize: 32,
-        callbacks: {
-            onEpochEnd: (epoch, logs) => {
-                trainingStatus.textContent = `Training... Epoch ${epoch + 1}/50`;
-            }
-        }
-    });
-
-    trainingStatus.textContent = 'Training complete!';
-}
-
 // Initialize the game
 createBoard();
-initializeModel();
